@@ -17,7 +17,7 @@ Inputs (camera index -> topic, optical frame):
     ros: /zed_<arm>/<eye>/image_rect_color, /zed_<arm>/<eye>/camera_info
     zed: /zed_<arm>/zed_node/<eye>/gray/rect/image, /zed_<arm>/zed_node/<eye>/gray/rect/camera_info
     zed_<arm>_<eye>_camera_optical_frame (from the amiad_description URDF, robot_state_publisher)
-Outputs: map -> odom -> base_link TF, /visual_slam/tracking/odometry, ...
+Outputs: map -> odom -> base_link TF (publish_tf:=false to disable), /visual_slam/tracking/odometry, ...
 """
 
 import launch
@@ -66,6 +66,9 @@ def launch_setup(context):
             'base_frame': 'base_link',
             'odom_frame': 'odom',
             'map_frame': 'map',
+            # false: odometry topics only, e.g. when basalt owns odom/base_link on TF
+            'publish_odom_to_base_tf': LaunchConfiguration('publish_tf').perform(context).lower() == 'true',
+            'publish_map_to_odom_tf': LaunchConfiguration('publish_tf').perform(context).lower() == 'true',
             'rectified_images': True,
             'enable_image_denoising': False,
             # ros: all cameras rendered on the same tick (identical stamps);
@@ -103,6 +106,9 @@ def generate_launch_description():
                                           '(false if it already runs)'),
         DeclareLaunchArgument('rviz', default_value='false',
                               description='also start the amiad_description RViz'),
+        DeclareLaunchArgument('publish_tf', default_value='true',
+                              description='broadcast map -> odom -> base_link (false when another '
+                                          'estimator, e.g. basalt, publishes base_link)'),
         DeclareLaunchArgument('source', default_value='ros',
                               description='ros: sim pinhole cameras, zed: ZED wrapper gray topics'),
         DeclareLaunchArgument('sync_ms', default_value='5.0',
