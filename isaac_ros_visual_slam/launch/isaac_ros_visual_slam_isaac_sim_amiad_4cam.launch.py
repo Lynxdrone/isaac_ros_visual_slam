@@ -4,13 +4,13 @@
 Keep the sim's ground truth off base_link, which cuVSLAM publishes (--gt-child-frame base_link_gt).
 cuVSLAM only takes mono8/rgb8 images, so the ZED wrapper's bgra8 color topics cannot be used.
 
-source:=ros (default), ideal pinhole cameras published by the sim (rgb8, identical stamps):
+source:=ros, ideal pinhole cameras published by the sim (rgb8, identical stamps):
     <isaac>/python.sh amiad_description/isaac/run_sim.py --camera-mode ros --gt-child-frame base_link_gt
-    ros2 launch isaac_ros_visual_slam isaac_ros_visual_slam_isaac_sim_amiad_4cam.launch.py
-source:=zed, ZED X streams through the ZED wrapper (gray rectified, mono8):
+    ros2 launch isaac_ros_visual_slam isaac_ros_visual_slam_isaac_sim_amiad_4cam.launch.py source:=ros
+source:=zed (default, launch_sim_teleop.sh default), ZED X streams through the ZED wrapper (gray rectified, mono8):
     <isaac>/python.sh amiad_description/isaac/run_sim.py --gt-child-frame base_link_gt
     ros2 launch amiad_description zed_sim_cameras.launch.py
-    ros2 launch isaac_ros_visual_slam isaac_ros_visual_slam_isaac_sim_amiad_4cam.launch.py source:=zed
+    ros2 launch isaac_ros_visual_slam isaac_ros_visual_slam_isaac_sim_amiad_4cam.launch.py
 
 Inputs (camera index -> topic, optical frame):
     0,1 front  2,3 rear   (left, right of each ZED; pairs = stereo; left/right ZEDs unused)
@@ -72,8 +72,9 @@ def launch_setup(context):
             'rectified_images': True,
             'enable_image_denoising': False,
             # ros: all cameras rendered on the same tick (identical stamps);
-            # zed: the 2 ZED streams are stamped independently
-            'sync_matching_threshold_ms': float(LaunchConfiguration('sync_ms').perform(context)),
+            # zed: the 2 ZED streams are stamped independently (looser default)
+            'sync_matching_threshold_ms': float(LaunchConfiguration('sync_ms').perform(context)
+                                                or (20.0 if source == 'zed' else 5.0)),
             'image_jitter_threshold_ms': float(LaunchConfiguration('jitter_ms').perform(context)),
             'enable_slam_visualization': True,
             'enable_observations_view': True,
@@ -109,11 +110,11 @@ def generate_launch_description():
         DeclareLaunchArgument('publish_tf', default_value='true',
                               description='broadcast map -> odom -> base_link (false when another '
                                           'estimator, e.g. basalt, publishes base_link)'),
-        DeclareLaunchArgument('source', default_value='ros',
+        DeclareLaunchArgument('source', default_value='zed',
                               description='ros: sim pinhole cameras, zed: ZED wrapper gray topics'),
-        DeclareLaunchArgument('sync_ms', default_value='5.0',
+        DeclareLaunchArgument('sync_ms', default_value='',
                               description='max stamp difference between the 4 images of one frame '
-                                          '(raise to ~20 with source:=zed)'),
+                                          '(default 5, 20 with source:=zed)'),
         DeclareLaunchArgument('jitter_ms', default_value='60.0',
                               description='max delta between frames before a warning '
                                           '(> 1000 / camera rate)'),
