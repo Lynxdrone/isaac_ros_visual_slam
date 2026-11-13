@@ -4,17 +4,18 @@
 Keep the sim's ground truth off base_link, which cuVSLAM publishes (--gt-child-frame base_link_gt).
 cuVSLAM only takes mono8/rgb8 images, so the ZED wrapper's bgra8 color topics cannot be used.
 
-source:=ros, ideal pinhole cameras published by the sim (rgb8, identical stamps):
+source:=ros (default, launch_sim_teleop.sh default), ideal pinhole cameras published by the sim
+(rgb8, identical stamps, /zed_<arm>/zed_node/<eye>/image_rect_color):
     <isaac>/python.sh amiad_description/isaac/run_sim.py --camera-mode ros --gt-child-frame base_link_gt
-    ros2 launch isaac_ros_visual_slam isaac_ros_visual_slam_isaac_sim_amiad_4cam.launch.py source:=ros
-source:=zed (default, launch_sim_teleop.sh default), ZED X streams through the ZED wrapper (gray rectified, mono8):
+    ros2 launch isaac_ros_visual_slam isaac_ros_visual_slam_isaac_sim_amiad_4cam.launch.py
+source:=zed (launch_sim_teleop.sh CAMERA_MODE=zed), ZED X streams through the ZED wrapper (gray rectified, mono8):
     <isaac>/python.sh amiad_description/isaac/run_sim.py --gt-child-frame base_link_gt
     ros2 launch amiad_description zed_sim_cameras.launch.py
-    ros2 launch isaac_ros_visual_slam isaac_ros_visual_slam_isaac_sim_amiad_4cam.launch.py
+    ros2 launch isaac_ros_visual_slam isaac_ros_visual_slam_isaac_sim_amiad_4cam.launch.py source:=zed
 
 Inputs (camera index -> topic, optical frame):
     0,1 front  2,3 rear   (left, right of each ZED; pairs = stereo; left/right ZEDs unused)
-    ros: /zed_<arm>/<eye>/image_rect_color, /zed_<arm>/<eye>/camera_info
+    ros: /zed_<arm>/zed_node/<eye>/image_rect_color, /zed_<arm>/zed_node/<eye>/camera_info
     zed: /zed_<arm>/zed_node/<eye>/gray/rect/image, /zed_<arm>/zed_node/<eye>/gray/rect/camera_info
     zed_<arm>_<eye>_camera_optical_frame (from the amiad_description URDF, robot_state_publisher)
 Outputs: map -> odom -> base_link TF (publish_tf:=false to disable), /visual_slam/tracking/odometry, ...
@@ -35,7 +36,7 @@ EYES = ['left', 'right']
 
 
 TOPICS = {
-    'ros': ('/zed_{arm}/{eye}/image_rect_color', '/zed_{arm}/{eye}/camera_info'),
+    'ros': ('/zed_{arm}/zed_node/{eye}/image_rect_color', '/zed_{arm}/zed_node/{eye}/camera_info'),
     'zed': ('/zed_{arm}/zed_node/{eye}/gray/rect/image', '/zed_{arm}/zed_node/{eye}/gray/rect/camera_info'),
 }
 
@@ -110,7 +111,7 @@ def generate_launch_description():
         DeclareLaunchArgument('publish_tf', default_value='true',
                               description='broadcast map -> odom -> base_link (false when another '
                                           'estimator, e.g. basalt, publishes base_link)'),
-        DeclareLaunchArgument('source', default_value='zed',
+        DeclareLaunchArgument('source', default_value='ros',
                               description='ros: sim pinhole cameras, zed: ZED wrapper gray topics'),
         DeclareLaunchArgument('sync_ms', default_value='',
                               description='max stamp difference between the 4 images of one frame '
