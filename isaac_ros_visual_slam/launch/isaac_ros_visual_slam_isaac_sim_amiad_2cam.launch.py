@@ -1,5 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""cuVSLAM with the 2 cameras of the front ZED X Wide stereo pair of the AMIAD rig in Isaac Sim.
+"""cuVSLAM with the 2 cameras of ONE ZED X Wide stereo pair of the AMIAD rig in Isaac Sim.
+
+camera:=front (default), rear, left or right picks the ZED; the extrinsics come from its
+zed_<camera>_<eye>_camera_optical_frame TF (URDF), so no per-camera calibration file is needed.
 
 Keep the sim's ground truth off base_link, which cuVSLAM publishes (--gt-child-frame base_link_gt).
 cuVSLAM only takes mono8/rgb8 images, so the ZED wrapper's bgra8 color topics cannot be used.
@@ -12,9 +15,10 @@ source:=zed (launch_sim_teleop.sh CAMERA_MODE=zed), ZED X streams through the ZE
     <isaac>/python.sh amiad_description/isaac/run_sim.py --gt-child-frame base_link_gt
     ros2 launch amiad_description zed_sim_cameras.launch.py
     ros2 launch isaac_ros_visual_slam isaac_ros_visual_slam_isaac_sim_amiad_2cam.launch.py source:=zed
+    ros2 launch isaac_ros_visual_slam isaac_ros_visual_slam_isaac_sim_amiad_2cam.launch.py source:=zed camera:=rear
 
-Inputs (camera index -> topic, optical frame):
-    0,1 front   (left, right; one stereo pair; rear/left/right ZEDs unused)
+Inputs (camera index -> topic, optical frame), <arm> = the camera argument:
+    0,1 <arm>   (left, right; one stereo pair; the other ZEDs unused)
     ros: /zed_<arm>/zed_node/<eye>/image_rect_color, /zed_<arm>/zed_node/<eye>/camera_info
     zed: /zed_<arm>/zed_node/<eye>/gray/rect/image, /zed_<arm>/zed_node/<eye>/gray/rect/camera_info
     zed_<arm>_<eye>_camera_optical_frame (from the amiad_description URDF, robot_state_publisher)
@@ -30,8 +34,9 @@ from launch_ros.actions import ComposableNodeContainer
 from launch_ros.descriptions import ComposableNode
 from launch_ros.substitutions import FindPackageShare
 
+# ZEDs of the rig; this launch uses the one given by the camera argument
+ARMS = ('front', 'rear', 'left', 'right')
 # Order matters: cuVSLAM treats cameras (0,1), (2,3), ... as stereo pairs
-ARMS = ['front']
 EYES = ['left', 'right']
 
 
@@ -46,7 +51,11 @@ def launch_setup(context):
     if source not in TOPICS:
         raise RuntimeError(f"source must be one of {list(TOPICS)}, got '{source}'")
     image_topic, info_topic = TOPICS[source]
-    cameras = [(arm, eye) for arm in ARMS for eye in EYES]
+    # '' when an including launch (vio_algorithms) declares camera without setting it
+    arm = LaunchConfiguration('camera').perform(context).strip() or 'front'
+    if arm not in ARMS:
+        raise RuntimeError(f"camera must be one of {list(ARMS)}, got '{arm}'")
+    cameras = [(arm, eye) for eye in EYES]
     remappings, optical_frames = [], []
     for idx, (arm, eye) in enumerate(cameras):
         remappings += [(f'visual_slam/image_{idx}', image_topic.format(arm=arm, eye=eye)),
@@ -113,6 +122,8 @@ def generate_launch_description():
         DeclareLaunchArgument('publish_tf', default_value='true',
                               description='broadcast map -> odom -> base_link (false when another '
                                           'estimator, e.g. basalt, publishes base_link)'),
+        DeclareLaunchArgument('camera', default_value='front',
+                              description='ZED X stereo pair: front, rear, left or right'),
         DeclareLaunchArgument('source', default_value='ros',
                               description='ros: sim pinhole cameras, zed: ZED wrapper gray topics'),
         DeclareLaunchArgument('sync_ms', default_value='',
