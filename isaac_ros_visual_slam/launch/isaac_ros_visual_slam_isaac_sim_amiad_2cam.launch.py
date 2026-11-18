@@ -22,6 +22,9 @@ Inputs (camera index -> topic, optical frame), <arm> = the camera argument:
     ros: /zed_<arm>/zed_node/<eye>/image_rect_color, /zed_<arm>/zed_node/<eye>/camera_info
     zed: /zed_<arm>/zed_node/<eye>/gray/rect/image, /zed_<arm>/zed_node/<eye>/gray/rect/camera_info
     zed_<arm>_<eye>_camera_optical_frame (from the amiad_description URDF, robot_state_publisher)
+imu:=true: VIO mode (tracking_mode 1), cuVSLAM also fuses imu_topic (default /pulse80/imu, frame
+pulse80_imu_link; base_link -> pulse80_imu_link from the URDF TF). NVIDIA documents stereo-inertial
+with one stereo pair: check the result with several pairs.
 Outputs: map -> odom -> base_link TF (publish_tf:=false to disable), /visual_slam/tracking/odometry, ...
 """
 
@@ -46,6 +49,19 @@ TOPICS = {
 }
 
 
+# imu:=true. Noise = basalt calibration of the sim pulse80 IMU (zedx_*_calib*.json), so that
+# both estimators model the same IMU (the node defaults are those of a RealSense)
+IMU_PARAMS = {
+    'imu_frame': 'pulse80_imu_link',   # '' = header.frame_id of the IMU messages
+    'calibration_frequency': 200.0,    # Hz, run_sim.py --imu-hz
+    'gyro_noise_density': 0.002,       # basalt gyro_noise_std
+    'gyro_random_walk': 0.0007,        # basalt gyro_bias_std
+    'accel_noise_density': 0.008,      # basalt accel_noise_std
+    'accel_random_walk': 0.01,         # basalt accel_bias_std
+    'imu_jitter_threshold_ms': 10.0,   # 200 Hz = 5 ms between messages
+}
+
+
 def launch_setup(context):
     source = LaunchConfiguration('source').perform(context)
     if source not in TOPICS:
@@ -62,6 +78,11 @@ def launch_setup(context):
                        (f'visual_slam/camera_info_{idx}', info_topic.format(arm=arm, eye=eye))]
         optical_frames.append(f'zed_{arm}_{eye}_camera_optical_frame')
 
+    # imu:=true: VIO mode, cuVSLAM fuses the IMU (waits for its first message before starting)
+    use_imu = LaunchConfiguration('imu').perform(context).lower() == 'true'
+    if use_imu:
+        remappings.append(('visual_slam/imu', LaunchConfiguration('imu_topic').perform(context)))
+
     visual_slam_node = ComposableNode(
         name='visual_slam_node',
         package='isaac_ros_visual_slam',
@@ -69,7 +90,7 @@ def launch_setup(context):
         remappings=remappings,
         parameters=[{
             'use_sim_time': True,
-            'tracking_mode': 0,  # multi camera
+            'tracking_mode': 1 if use_imu else 0,  # 1 = VIO (IMU fusion), 0 = multi camera
             'num_cameras': len(cameras),
             'min_num_images': len(cameras),
             'camera_optical_frames': optical_frames,
@@ -91,6 +112,7 @@ def launch_setup(context):
             'enable_slam_visualization': True,
             'enable_observations_view': True,
             'enable_landmarks_view': True,
+            **(IMU_PARAMS if use_imu else {}),
         }])
 
     return [ComposableNodeContainer(
@@ -126,6 +148,10 @@ def generate_launch_description():
                               description='ZED X stereo pair: front, rear, left or right'),
         DeclareLaunchArgument('source', default_value='ros',
                               description='ros: sim pinhole cameras, zed: ZED wrapper gray topics'),
+        DeclareLaunchArgument('imu', default_value='false',
+                              description='true: VIO mode (tracking_mode 1), also fuse imu_topic'),
+        DeclareLaunchArgument('imu_topic', default_value='/pulse80/imu',
+                              description='sensor_msgs/Imu topic fused with imu:=true'),
         DeclareLaunchArgument('sync_ms', default_value='',
                               description='max stamp difference between the 2 images of one frame '
                                           '(default 5)'),
