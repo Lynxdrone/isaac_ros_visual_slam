@@ -230,6 +230,9 @@ private:
   // This is useful for maintaining the one-parent rule in systems with multiple odometry sources.
   const bool invert_map_to_odom_tf_;
   const bool invert_odom_to_base_tf_;
+  // TF frame (e.g. base_link_gt, Isaac Sim ground truth) whose pose in odom_frame sets the
+  // first published pose: odometry and SLAM pose share that reference. Empty: disabled.
+  const std::string align_frame_;
 
   // Debug/Visualization Parameters:
   // Enable slam data visualization (Landmarks, Pose Graph, etc).

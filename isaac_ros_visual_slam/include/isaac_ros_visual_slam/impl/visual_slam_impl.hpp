@@ -194,6 +194,11 @@ struct VisualSlamNode::VisualSlamImpl
   // Localizer: loop closure landmarks
   LandmarksVisHelper localizer_lc_landmarks_vis_helper;
 
+  // align_frame: transform from cuVSLAM's odom origin to the reference (ground truth) odom,
+  // computed at the first tracked pose.
+  bool have_align{false};
+  tf2::Transform ref_pose_odom{tf2::Transform::getIdentity()};
+
   // Pose cache. For velocity calculation.
   PoseCache pose_cache;
 

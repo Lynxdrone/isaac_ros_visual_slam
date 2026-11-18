@@ -340,6 +340,7 @@ void VisualSlamNode::VisualSlamImpl::Initialize()
 
   pose_cache.Reset();
   velocity_cache.Reset();
+  have_align = false;
 
   // Initialize visualization helpers.
   if (node.enable_slam_visualization_) {
@@ -417,6 +418,7 @@ void VisualSlamNode::VisualSlamImpl::Exit()
 
   pose_cache.Reset();
   velocity_cache.Reset();
+  have_align = false;
 
   initial_imu_message.reset();
   initial_camera_info_messages.clear();
@@ -846,8 +848,35 @@ void VisualSlamNode::VisualSlamImpl::UpdatePose(
     // odom and map are using same conventions.
     const tf2::Transform cv_odom_pose_cv_base_link =
       FromcuVSLAMPose(vo_pose_estimate.world_from_rig.value().pose);
-    const tf2::Transform odom_pose_base_link = ChangeBasis(
+    tf2::Transform odom_pose_base_link = ChangeBasis(
       canonical_pose_cuvslam, cv_odom_pose_cv_base_link);
+
+    // align_frame: re-anchor the odometry so that its first pose is the TF pose
+    // odom_frame -> align_frame (e.g. the Isaac Sim ground truth base_link_gt).
+    if (!node.align_frame_.empty()) {
+      if (!have_align) {
+        try {
+          const auto tf = tf_buffer->lookupTransform(
+            node.odom_frame_, node.align_frame_, rclcpp::Time(latest_ts, RCL_ROS_TIME));
+          tf2::Transform odom_pose_align;
+          tf2::fromMsg(tf.transform, odom_pose_align);
+          // T_ref_odom * T_odom_base(t0) = T_ref_align(t0)
+          ref_pose_odom = odom_pose_align * odom_pose_base_link.inverse();
+          have_align = true;
+          const tf2::Vector3 & t = odom_pose_align.getOrigin();
+          RCLCPP_INFO(
+            node.get_logger(), "Aligned odometry to TF %s -> %s: start t=(%.3f, %.3f, %.3f)",
+            node.odom_frame_.c_str(), node.align_frame_.c_str(), t.x(), t.y(), t.z());
+        } catch (const tf2::TransformException & e) {
+          RCLCPP_WARN_THROTTLE(
+            node.get_logger(), *node.get_clock(), 2000,
+            "Waiting for TF %s -> %s to align the odometry: %s",
+            node.odom_frame_.c_str(), node.align_frame_.c_str(), e.what());
+          return;
+        }
+      }
+      odom_pose_base_link = ref_pose_odom * odom_pose_base_link;
+    }
 
     // Get SLAM pose and transform to ROS conventions. The SLAM pose uses loop closures for robust
     // tracking.
@@ -865,7 +894,9 @@ void VisualSlamNode::VisualSlamImpl::UpdatePose(
       }
     }
 
-    const tf2::Transform map_pose_base_link =
+    // same anchor for the SLAM pose: map starts on the reference odom (map -> odom = identity)
+    const tf2::Transform map_pose_base_link = (node.align_frame_.empty() ?
+      tf2::Transform::getIdentity() : ref_pose_odom) *
       ChangeBasis(canonical_pose_cuvslam, cv_map_pose_cv_base_link);
     const tf2::Transform map_pose_odom = map_pose_base_link * odom_pose_base_link.inverse();
 

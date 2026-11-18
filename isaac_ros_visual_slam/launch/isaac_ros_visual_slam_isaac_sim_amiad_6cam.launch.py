@@ -70,6 +70,8 @@ def launch_setup(context):
             # false: odometry topics only, e.g. when basalt owns odom/base_link on TF
             'publish_odom_to_base_tf': LaunchConfiguration('publish_tf').perform(context).lower() == 'true',
             'publish_map_to_odom_tf': LaunchConfiguration('publish_tf').perform(context).lower() == 'true',
+            # first pose = TF odom -> align_frame (Isaac Sim ground truth): same reference
+            'align_frame': LaunchConfiguration('align_frame').perform(context),
             'rectified_images': True,
             'enable_image_denoising': False,
             # ros: all cameras rendered on the same tick (identical stamps);
@@ -116,6 +118,10 @@ def generate_launch_description():
         DeclareLaunchArgument('sync_ms', default_value='',
                               description='max stamp difference between the 6 images of one frame '
                                           '(default 5, 20 with source:=zed)'),
+        DeclareLaunchArgument('align_frame', default_value='',
+                              description='TF frame (e.g. base_link_gt, Isaac Sim ground truth) whose '
+                                          'pose in odom sets the first cuVSLAM pose: same reference '
+                                          'as that odometry. Empty: cuVSLAM starts at identity'),
         DeclareLaunchArgument('jitter_ms', default_value='60.0',
                               description='max delta between frames before a warning '
                                           '(> 1000 / camera rate)'),

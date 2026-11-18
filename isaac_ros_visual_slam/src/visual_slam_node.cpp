@@ -112,6 +112,7 @@ publish_map_to_odom_tf_(declare_parameter<bool>("publish_map_to_odom_tf", true))
 publish_odom_to_base_tf_(declare_parameter<bool>("publish_odom_to_base_tf", true)),
 invert_map_to_odom_tf_(declare_parameter<bool>("invert_map_to_odom_tf", false)),
 invert_odom_to_base_tf_(declare_parameter<bool>("invert_odom_to_base_tf", false)),
+align_frame_(declare_parameter<std::string>("align_frame", "")),
 // Debug/Visualization Parameters:
 enable_slam_visualization_(declare_parameter<bool>("enable_slam_visualization", false)),
 enable_observations_view_(declare_parameter<bool>("enable_observations_view", false)),
