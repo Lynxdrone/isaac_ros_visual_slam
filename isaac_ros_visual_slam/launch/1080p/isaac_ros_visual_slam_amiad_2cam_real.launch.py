@@ -1,16 +1,19 @@
 # SPDX-License-Identifier: Apache-2.0
-"""cuVSLAM with the front ZED X stereo pair of the real AMIAD rig (Isaac Sim version:
+"""cuVSLAM with the front ZED X stereo pair of the real AMIAD rig, ZED HD1080 (1920x1080) (Isaac Sim version:
 isaac_ros_visual_slam_isaac_sim_amiad_2cam.launch.py).
 
 Camera extrinsics from the Kalibr camera-IMU calibration of the front ZED X with the Epson IMU
-(front_cameras_imu.bag_0-camchain-imucam.yaml, same values as basalt_ros zedx_front_calib_zed_real.json):
+at 1080p (front_cameras_imu_1080p.bag_0-camchain-imucam.yaml, same values as basalt_ros
+config/1080p/zedx_front_calib_zed_real.json):
 static TFs imu_link -> zed_front_{left,right}_camera_optical_frame_epson. Separate frame names, so they
 do not clash with the CAD optical frames of the rover URDF; base_link -> imu_link comes from that URDF
 (rover_description rover_amiad.urdf.xacro, started by amiad_nav onboard.launch.py).
-Intrinsics: camera_info of the ZED wrapper (rectified images, no distortion).
+Intrinsics: camera_info of the ZED wrapper (rectified images, no distortion); the ZED must run at
+HD1080 (fx ~707.9, cx ~953.7, cy ~534.1 on /zed_front/zed_node/left/gray/rect/camera_info).
 
     ros2 launch amiad_nav onboard.launch.py        # ZED X, Epson IMU (/imu/data), rover URDF
-    ros2 launch isaac_ros_visual_slam isaac_ros_visual_slam_amiad_2cam_real.launch.py [imu:=true]
+    ros2 launch $(ros2 pkg prefix isaac_ros_visual_slam)/share/isaac_ros_visual_slam/launch/1080p/isaac_ros_visual_slam_amiad_2cam_real.launch.py [imu:=true]
+    (full path: launch/svga/ has a file with the same name)
 
 Inputs (camera index -> topic, optical frame):
     0,1 front (left, right; one stereo pair)
@@ -34,16 +37,16 @@ from launch_ros.descriptions import ComposableNode
 IMU_FRAME = 'imu_link'
 
 # Kalibr T_imu_cam (camera optical frame pose in the Epson IMU frame, x forward, y left, z up):
-# inverse of T_cam_imu of front_cameras_imu.bag_0-camchain-imucam.yaml.
-# Kalibr timeshift_cam_imu: 4.74 ms (left), 4.79 ms (right): not compensated by cuVSLAM.
+# inverse of T_cam_imu of front_cameras_imu_1080p.bag_0-camchain-imucam.yaml.
+# Kalibr timeshift_cam_imu: 3.09 ms (left), 3.28 ms (right): not compensated by cuVSLAM.
 # cuVSLAM (rectified_images) needs the 2 cameras of a pair with the exact same rotation: the ZED
-# images are rectified, so right = left rotation, shifted by the Kalibr baseline (0.119326 m) along
-# the left optical x axis (< 0.5 mm from the Kalibr right camera position; Kalibr's 0.03 deg
+# images are rectified, so right = left rotation, shifted by the Kalibr baseline (0.120197 m) along
+# the left optical x axis (0.2 mm from the Kalibr right camera position; Kalibr's 0.08 deg
 # left/right rotation is calibration noise on rectified images).
 CAMERAS = [
     # (eye, x, y, z, qx, qy, qz, qw)
-    ('left', 0.212808, 0.058007, 0.081465, -0.49609879, 0.503399112, -0.499256903, 0.50121639),
-    ('right', 0.212171, -0.061312, 0.08036, -0.49609879, 0.503399112, -0.499256903, 0.50121639),
+    ('left', 0.242076, 0.054676, 0.0811, -0.49717892, 0.50349595, -0.49745386, 0.50184122),
+    ('right', 0.241843, -0.065514, 0.079814, -0.49717892, 0.50349595, -0.49745386, 0.50184122),
 ]
 IMAGE_TOPIC = '/zed_front/zed_node/{eye}/gray/rect/image'
 INFO_TOPIC = '/zed_front/zed_node/{eye}/gray/rect/camera_info'
@@ -94,7 +97,7 @@ def launch_setup(context):
         remappings.append(('visual_slam/imu', LaunchConfiguration('imu_topic').perform(context)))
         parameters.update({
             'imu_frame': IMU_FRAME,
-            # Epson G366 noise model, Kalibr front_cameras_imu.bag_0-imu.yaml (imu0, /imu/data,
+            # Epson G366 noise model, Kalibr front_cameras_imu_1080p.bag_0-imu.yaml (imu0, /imu/data,
             # update_rate 400 Hz = rate the noise model was identified at)
             'calibration_frequency': 400.0,
             'gyro_noise_density': 2.5168513991925153e-05,   # rad/s/sqrt(Hz)
