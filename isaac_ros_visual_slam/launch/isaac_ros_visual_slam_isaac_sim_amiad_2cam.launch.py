@@ -102,6 +102,9 @@ def launch_setup(context):
             'publish_map_to_odom_tf': LaunchConfiguration('publish_tf').perform(context).lower() == 'true',
             # first pose = TF odom -> align_frame (Isaac Sim ground truth): same reference
             'align_frame': LaunchConfiguration('align_frame').perform(context),
+            # odometry only, no SLAM: the first SLAM keyframe was missed when the first image
+            # came before the align_frame TF, and no pose was published until the next keyframe
+            'enable_localization_n_mapping': False,
             'rectified_images': True,
             'enable_image_denoising': False,
             # ros: all cameras rendered on the same tick (identical stamps);
