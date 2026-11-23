@@ -13,6 +13,8 @@ Arguments:
                  from its camera_info).
     num_cameras  2 | 4 | 6 | 8 (2 images per ZED), default 2:
                  2: front   4: + rear   6: + left   8: + right
+    cameras      any set of ZED, comma separated, overrides num_cameras, e.g. cameras:=left,right
+                 or cameras:=rear,left,right (sorted front, rear, left, right; default '': num_cameras)
 
 Camera extrinsics: one Epson IMU (imu_link) and, per resolution, the Kalibr camera-IMU calibration of each
 ZED X (<arm>_cameras_imu[_1080p].bag_0-camchain-imucam.yaml, same values as basalt_ros
@@ -101,10 +103,18 @@ def launch_setup(context):
     resolution = LaunchConfiguration('resolution').perform(context).strip().lower()
     if resolution not in CAMERA_POSES:
         raise RuntimeError(f"resolution must be one of {list(CAMERA_POSES)}, got '{resolution}'")
-    num_cameras = LaunchConfiguration('num_cameras').perform(context).strip()
-    if num_cameras not in NUM_CAMERAS:
-        raise RuntimeError(f"num_cameras must be one of {NUM_CAMERAS}, got '{num_cameras}'")
-    arms = ARMS[:int(num_cameras) // 2]
+    camera_arg = LaunchConfiguration('cameras').perform(context).strip()
+    if camera_arg:
+        names = {a.strip() for a in camera_arg.split(',') if a.strip()}
+        if not names or names - set(ARMS):
+            raise RuntimeError(f"cameras must be a comma separated list of {ARMS}, got '{camera_arg}'")
+        arms = [a for a in ARMS if a in names]
+        num_cameras = str(2 * len(arms))
+    else:
+        num_cameras = LaunchConfiguration('num_cameras').perform(context).strip()
+        if num_cameras not in NUM_CAMERAS:
+            raise RuntimeError(f"num_cameras must be one of {NUM_CAMERAS}, got '{num_cameras}'")
+        arms = ARMS[:int(num_cameras) // 2]
     poses = CAMERA_POSES[resolution]
     cameras = [(arm, eye) for arm in arms for eye in ('left', 'right')]
 
@@ -130,7 +140,8 @@ def launch_setup(context):
         remappings += [(f'visual_slam/image_{idx}', IMAGE_TOPIC.format(arm=arm, eye=eye)),
                        (f'visual_slam/camera_info_{idx}', INFO_TOPIC.format(arm=arm, eye=eye))]
     parameters = {
-        'use_sim_time': False,
+        # true when replaying a bag with ros2 bag play --clock
+        'use_sim_time': LaunchConfiguration('use_sim_time').perform(context).lower() == 'true',
         'tracking_mode': 1 if use_imu else 0,  # 1: VIO (IMU fusion), 0: multi camera
         'num_cameras': len(cameras),
         'min_num_images': len(cameras),
@@ -200,6 +211,9 @@ def generate_launch_description():
         DeclareLaunchArgument('num_cameras', default_value='2',
                               description='2 (front), 4 (+ rear), 6 (+ left) or 8 (+ right): '
                                           'ZED X images, 2 per stereo pair'),
+        DeclareLaunchArgument('cameras', default_value='',
+                              description=f'ZED set, comma separated among {ARMS} (e.g. left,right); '
+                                          'overrides num_cameras. Empty: num_cameras'),
         DeclareLaunchArgument('robot_description', default_value='false',
                               description='start robot_state_publisher with the rover + AMIAD short rig '
                                           'URDF (true if onboard.launch.py is not running)'),
@@ -216,6 +230,8 @@ def generate_launch_description():
         DeclareLaunchArgument('sync_ms', default_value='',
                               description='max stamp difference [ms] between the images of one frame '
                                           f'(empty: {SYNC_MS_ONE_ZED} for 1 ZED, {SYNC_MS_MULTI_ZED} for several)'),
+        DeclareLaunchArgument('use_sim_time', default_value='false',
+                              description='true: /clock time, to replay a bag (ros2 bag play --clock)'),
         DeclareLaunchArgument('jitter_ms', default_value='60.0',
                               description='max delta between frames before a warning '
                                           '(> 1000 / camera rate)'),
