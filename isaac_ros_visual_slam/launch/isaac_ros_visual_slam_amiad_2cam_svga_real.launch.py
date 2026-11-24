@@ -35,15 +35,15 @@ IMU_FRAME = 'imu_link'
 
 # Kalibr T_imu_cam (camera optical frame pose in the Epson IMU frame, x forward, y left, z up):
 # inverse of T_cam_imu of front_cameras_imu.bag_0-camchain-imucam.yaml.
-# Kalibr timeshift_cam_imu: 4.74 ms (left), 4.79 ms (right): not compensated by cuVSLAM.
+# Kalibr timeshift_cam_imu: 3.05 ms (left), 3.46 ms (right): not compensated by cuVSLAM.
 # cuVSLAM (rectified_images) needs the 2 cameras of a pair with the exact same rotation: the ZED
-# images are rectified, so right = left rotation, shifted by the Kalibr baseline (0.119326 m) along
-# the left optical x axis (< 0.5 mm from the Kalibr right camera position; Kalibr's 0.03 deg
+# images are rectified, so right = left rotation, shifted by the Kalibr baseline (0.119509 m) along
+# the left optical x axis (< 0.5 mm from the Kalibr right camera position; Kalibr's 0.07 deg
 # left/right rotation is calibration noise on rectified images).
 CAMERAS = [
     # (eye, x, y, z, qx, qy, qz, qw)
-    ('left', 0.212808, 0.058007, 0.081465, -0.49609879, 0.503399112, -0.499256903, 0.50121639),
-    ('right', 0.212171, -0.061312, 0.08036, -0.49609879, 0.503399112, -0.499256903, 0.50121639),
+    ('left', 0.210114, 0.052741, 0.077321, -0.49756884, 0.504497409, -0.497467519, 0.500433493),
+    ('right', 0.209638, -0.066762, 0.07614, -0.49756884, 0.504497409, -0.497467519, 0.500433493),
 ]
 IMAGE_TOPIC = '/zed_front/zed_node/{eye}/gray/rect/image'
 INFO_TOPIC = '/zed_front/zed_node/{eye}/gray/rect/camera_info'

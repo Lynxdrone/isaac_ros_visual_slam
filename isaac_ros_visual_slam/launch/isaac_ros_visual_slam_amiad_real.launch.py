@@ -71,17 +71,17 @@ NUM_CAMERAS = ['2', '4', '6', '8']
 # (<= 1 mm from the Kalibr right camera positions; Kalibr's ~0.03-0.11 deg left/right rotation is
 # calibration noise on rectified images).
 # Kalibr timeshift_cam_imu (left / right), not compensated by cuVSLAM:
-#   svga:  front 4.74 / 4.79 ms, rear -2.35 / 0.27 ms, left 2.92 / 2.89 ms
+#   svga:  front 3.05 / 3.46 ms, rear 3.46 / 3.13 ms, left 2.92 / 2.89 ms
 #   1080p: front 3.09 / 3.28 ms, rear 4.56 / 4.58 ms, left 3.57 / 3.99 ms, right 4.82 / 5.09 ms
 CAMERA_POSES = {
-    # front_/rear_/left_cameras_imu.bag_0-camchain-imucam.yaml; baselines front 0.119326 m,
-    # rear 0.119176 m, left 0.119269 m. The right ZED was not calibrated at SVGA: left ZED pose turned
+    # front_/rear_/left_cameras_imu.bag_0-camchain-imucam.yaml; baselines front 0.119509 m,
+    # rear 0.119820 m, left 0.119269 m. The right ZED was not calibrated at SVGA: left ZED pose turned
     # 180 deg about the vertical axis x=0, y=0.01 of imu_link (CAD symmetry of the rig).
     'svga': {
-        ('front', 'left'): (0.212808, 0.058007, 0.081465, -0.49609879, 0.503399112, -0.499256903, 0.50121639),
-        ('front', 'right'): (0.212171, -0.061312, 0.08036, -0.49609879, 0.503399112, -0.499256903, 0.50121639),
-        ('rear', 'left'): (-0.201752, -0.072387, 0.034756, -0.505409369, -0.492488832, 0.48838072, 0.513322893),
-        ('rear', 'right'): (-0.197238, 0.046695, 0.03618, -0.505409369, -0.492488832, 0.48838072, 0.513322893),
+        ('front', 'left'): (0.210114, 0.052741, 0.077321, -0.49756884, 0.504497409, -0.497467519, 0.500433493),
+        ('front', 'right'): (0.209638, -0.066762, 0.07614, -0.49756884, 0.504497409, -0.497467519, 0.500433493),
+        ('rear', 'left'): (-0.237972, -0.062693, 0.067713, -0.499719701, -0.503989761, 0.493934102, 0.502298361),
+        ('rear', 'right'): (-0.237487, 0.057117, 0.069229, -0.499719701, -0.503989761, 0.493934102, 0.502298361),
         ('left', 'left'): (-0.074542, 0.218419, 0.081774, -0.702414107, 0.000562529, -0.001163425, 0.711767344),
         ('left', 'right'): (0.044726, 0.218127, 0.081873, -0.702414107, 0.000562529, -0.001163425, 0.711767344),
         ('right', 'left'): (0.074542, -0.198419, 0.081774, -0.000562529, -0.702414107, 0.711767344, 0.001163425),

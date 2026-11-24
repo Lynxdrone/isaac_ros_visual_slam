@@ -37,18 +37,18 @@ IMU_FRAME = 'imu_link'
 # Kalibr T_imu_cam (camera optical frame pose in the Epson IMU frame, x forward, y left, z up):
 # inverse of T_cam_imu of the front / rear / left camchain-imucam.yaml.
 # Order matters: cuVSLAM treats cameras (0,1), (2,3), (4,5) as stereo pairs.
-# Kalibr timeshift_cam_imu: front 4.74 / 4.79 ms, rear -2.35 / 0.27 ms,
+# Kalibr timeshift_cam_imu: front 3.05 / 3.46 ms, rear 3.46 / 3.13 ms,
 # left 2.92 / 2.89 ms: not compensated by cuVSLAM.
 # cuVSLAM (rectified_images) needs the 2 cameras of a pair with the exact same rotation: the ZED
-# images are rectified, so right = left rotation, shifted by the Kalibr baseline (front 0.119326 m,
-# rear 0.119176 m, left 0.119269 m) along the left optical x axis (< 0.5 mm from the Kalibr right camera positions;
-# Kalibr's ~0.04 deg left/right rotation is calibration noise on rectified images).
+# images are rectified, so right = left rotation, shifted by the Kalibr baseline (front 0.119509 m,
+# rear 0.119820 m, left 0.119269 m) along the left optical x axis (< 0.7 mm from the Kalibr right camera positions;
+# Kalibr's ~0.1 deg left/right rotation is calibration noise on rectified images).
 CAMERAS = [
     # (arm, eye, x, y, z, qx, qy, qz, qw)
-    ('front', 'left', 0.212808, 0.058007, 0.081465, -0.49609879, 0.503399112, -0.499256903, 0.50121639),
-    ('front', 'right', 0.212171, -0.061312, 0.08036, -0.49609879, 0.503399112, -0.499256903, 0.50121639),
-    ('rear', 'left', -0.201752, -0.072387, 0.034756, -0.505409369, -0.492488832, 0.48838072, 0.513322893),
-    ('rear', 'right', -0.197238, 0.046695, 0.03618, -0.505409369, -0.492488832, 0.48838072, 0.513322893),
+    ('front', 'left', 0.210114, 0.052741, 0.077321, -0.49756884, 0.504497409, -0.497467519, 0.500433493),
+    ('front', 'right', 0.209638, -0.066762, 0.07614, -0.49756884, 0.504497409, -0.497467519, 0.500433493),
+    ('rear', 'left', -0.237972, -0.062693, 0.067713, -0.499719701, -0.503989761, 0.493934102, 0.502298361),
+    ('rear', 'right', -0.237487, 0.057117, 0.069229, -0.499719701, -0.503989761, 0.493934102, 0.502298361),
     ('left', 'left', -0.074542, 0.218419, 0.081774, -0.702414107, 0.000562529, -0.001163425, 0.711767344),
     ('left', 'right', 0.044726, 0.218127, 0.081873, -0.702414107, 0.000562529, -0.001163425, 0.711767344),
 ]
