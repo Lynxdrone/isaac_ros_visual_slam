@@ -29,6 +29,21 @@ Inputs (camera index -> topic, optical frame):
     zed_<arm>_<eye>_camera_optical_frame_epson
     imu:=true: /imu/data (frame imu_link), cuVSLAM VIO mode
 Outputs: map -> odom -> base_link TF (publish_tf:=false to disable), /visual_slam/tracking/odometry, ...
+
+Comparison with FAST-LIVO2 (output_frame:=livox_frame [odom_frame:=camera_init]):
+    cuVSLAM tracks the URDF livox_frame (Livox Mid-360, child of base_link through the rig URDF) instead of
+    base_link: the rig extrinsics are taken from TF livox_frame -> camera optical frames / imu_link, so the
+    odometry is the pose of livox_frame in an odom frame that starts on livox_frame (identity at the first
+    tracked image), the convention of FAST-LIVO2 (world = first lidar pose). /visual_slam/tracking/odometry
+    then has child_frame_id livox_frame and is directly comparable with /lio_odom (evo / ov_eval).
+    The odom -> livox_frame TF is never broadcast (livox_frame already has its URDF parent); map -> odom
+    is still published with publish_tf:=true.
+
+    align_frame:=livox_frame: instead of starting at identity, the odometry (and the SLAM pose) starts
+    on the TF pose odom_frame -> livox_frame at the first tracked image, e.g. the FAST-LIVO2 pose with
+    odom_frame:=camera_init when FAST-LIVO2 publishes camera_init -> ... -> livox_frame on TF. Same
+    physical frame as output_frame, so the two trajectories share their start. cuVSLAM publishes nothing
+    until that TF exists ("Waiting for TF ... to align the odometry").
 """
 
 import os
@@ -122,9 +137,24 @@ def launch_setup(context):
     publish_tf = LaunchConfiguration('publish_tf').perform(context).lower() == 'true'
     sync_ms = LaunchConfiguration('sync_ms').perform(context).strip()
     sync_ms = float(sync_ms) if sync_ms else (SYNC_MS_ONE_ZED if len(arms) == 1 else SYNC_MS_MULTI_ZED)
+    output_frame = LaunchConfiguration('output_frame').perform(context).strip() or 'base_link'
+    odom_frame = LaunchConfiguration('odom_frame').perform(context).strip() or 'odom'
+    # a frame of the URDF other than base_link (e.g. livox_frame) already has a parent: cuVSLAM must not
+    # broadcast odom -> <output_frame> on TF, the pose only goes to the odometry topics
+    publish_odom_tf = publish_tf and output_frame == 'base_link'
+    align_frame = LaunchConfiguration('align_frame').perform(context).strip()
+    if align_frame and publish_odom_tf:
+        # odom -> align_frame would go through cuVSLAM's own odom -> base_link TF, which it only
+        # publishes once aligned: it would wait forever
+        raise RuntimeError(f'align_frame:={align_frame} needs the TF {odom_frame} -> {align_frame} from '
+                           f'another estimator: use publish_tf:=false or output_frame:=livox_frame')
 
     actions = [LogInfo(msg=f'[visual_slam] {resolution}, {num_cameras} cameras ({", ".join(arms)}), '
-                           f'sync {sync_ms} ms, {"VIO" if use_imu else "multi camera"}')]
+                           f'sync {sync_ms} ms, {"VIO" if use_imu else "multi camera"}, '
+                           f'pose of {output_frame} in {odom_frame}'
+                           + ('' if publish_odom_tf or not publish_tf else
+                              f' (no TF {odom_frame} -> {output_frame}: frame of the URDF)')
+                           + (f', start aligned on TF {odom_frame} -> {align_frame}' if align_frame else ''))]
 
     actions += [
         Node(package='tf2_ros', executable='static_transform_publisher',
@@ -146,14 +176,17 @@ def launch_setup(context):
         'num_cameras': len(cameras),
         'min_num_images': len(cameras),
         'camera_optical_frames': [optical_frame(arm, eye) for arm, eye in cameras],
-        'base_frame': 'base_link',
-        'odom_frame': 'odom',
+        # rig frame of cuVSLAM: base_link, or livox_frame to compare with FAST-LIVO2 (see output_frame)
+        'base_frame': output_frame,
+        'odom_frame': odom_frame,
         'map_frame': 'map',
+        # '': odometry starts at identity; else starts on the TF pose odom_frame -> align_frame
+        'align_frame': align_frame,
         # false: odometry topics only, e.g. when basalt owns odom/base_link on TF
-        'publish_odom_to_base_tf': publish_tf,
+        'publish_odom_to_base_tf': publish_odom_tf,
         'publish_map_to_odom_tf': publish_tf,
         'rectified_images': True,
-        'enable_image_denoising': False,
+        'enable_image_denoising': True,
         'sync_matching_threshold_ms': sync_ms,
         'image_jitter_threshold_ms': float(LaunchConfiguration('jitter_ms').perform(context)),
         'enable_slam_visualization': True,
@@ -220,6 +253,17 @@ def generate_launch_description():
         DeclareLaunchArgument('publish_tf', default_value='true',
                               description='broadcast map -> odom -> base_link (false when another '
                                           'estimator, e.g. basalt, publishes base_link)'),
+        DeclareLaunchArgument('output_frame', default_value='livox_frame',
+                              description='frame whose pose cuVSLAM estimates: base_link, or livox_frame '
+                                          '(URDF Livox Mid-360) to compare with FAST-LIVO2 /lio_odom; '
+                                          'other than base_link: no odom -> output_frame TF'),
+        DeclareLaunchArgument('odom_frame', default_value='odom',
+                              description='odometry frame name (e.g. camera_init, the FAST-LIVO2 world, '
+                                          'with output_frame:=livox_frame)'),
+        DeclareLaunchArgument('align_frame', default_value='',
+                              description='e.g. livox_frame: start the odometry on the TF pose odom_frame -> '
+                                          'align_frame published by another estimator (FAST-LIVO2 with '
+                                          'odom_frame:=camera_init); empty: start at identity'),
         DeclareLaunchArgument('imu', default_value='false',
                               description='true: VIO mode with the Epson IMU (Kalibr extrinsics)'),
         DeclareLaunchArgument('imu_topic', default_value='/imu/data',
@@ -231,10 +275,10 @@ def generate_launch_description():
                               description='max stamp difference [ms] between the images of one frame '
                                           f'(empty: {SYNC_MS_ONE_ZED} for 1 ZED, {SYNC_MS_MULTI_ZED} for several)'),
         DeclareLaunchArgument('use_sim_time', default_value='false',
-                              description='true: /clock time, to replay a bag (ros2 bag play --clock)'),
-        DeclareLaunchArgument('jitter_ms', default_value='60.0',
+                              description='true: /clock time, to replay a bag (ros2 bag play --clock)'),       
+        DeclareLaunchArgument('jitter_ms', default_value='70.0',
                               description='max delta between frames before a warning '
-                                          '(> 1000 / camera rate)'),
+                                          '(> 1000 / camera rate)'),        
         robot_description,
         OpaqueFunction(function=launch_setup),
     ])

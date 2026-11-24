@@ -153,7 +153,7 @@ def generate_launch_description():
                                           '(onboard.launch.py imu_dout_rate 8 = 400 Hz)'),
         DeclareLaunchArgument('sync_ms', default_value='5.0',
                               description='max stamp difference between the 2 images of one frame'),
-        DeclareLaunchArgument('jitter_ms', default_value='60.0',
+        DeclareLaunchArgument('jitter_ms', default_value='70.0',
                               description='max delta between frames before a warning '
                                           '(> 1000 / camera rate)'),
         robot_description,
