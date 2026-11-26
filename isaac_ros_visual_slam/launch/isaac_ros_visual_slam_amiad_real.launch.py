@@ -111,8 +111,24 @@ SYNC_MS_ONE_ZED = 5.0
 SYNC_MS_MULTI_ZED = 20.0
 
 
-def optical_frame(arm, eye):
-    return f'zed_{arm}_{eye}_camera_optical_frame_epson'
+def parse_overrides(text, parameters):
+    """'name=value;name=value' -> {name: value} (YAML-typed); an int given for a float parameter of
+    `parameters` becomes a float (ROS 2 rejects an int for a double parameter)."""
+    import yaml
+    out = {}
+    for item in [i.strip() for i in text.replace(',', ';').split(';') if i.strip()]:
+        if '=' not in item:
+            raise RuntimeError(f"overrides: expected name=value, got '{item}'")
+        name, value = (x.strip() for x in item.split('=', 1))
+        value = yaml.safe_load(value)
+        if isinstance(parameters.get(name), float) and isinstance(value, int) and not isinstance(value, bool):
+            value = float(value)
+        out[name] = value
+    return out
+
+
+def optical_frame(arm, eye, suffix='_epson'):
+    return f'zed_{arm}_{eye}_camera_optical_frame{suffix}'
 
 
 def launch_setup(context):
@@ -135,6 +151,11 @@ def launch_setup(context):
     cameras = [(arm, eye) for arm in arms for eye in ('left', 'right')]
 
     use_imu = LaunchConfiguration('imu').perform(context).lower() == 'true'
+    # optical frame names zed_<arm>_<eye>_camera_optical_frame<suffix>: a bag recorded while this
+    # launch ran has these static TFs in /tf_static (calibration of that time); a replay with the
+    # same names mixes them with the current CAMERA_POSES (cuVSLAM: "Rectified stereo camera mode
+    # requires rectified stereo cameras"), so replays use another suffix
+    suffix = LaunchConfiguration('frame_suffix').perform(context).strip()
     publish_tf = LaunchConfiguration('publish_tf').perform(context).lower() == 'true'
     sync_ms = LaunchConfiguration('sync_ms').perform(context).strip()
     sync_ms = float(sync_ms) if sync_ms else (SYNC_MS_ONE_ZED if len(arms) == 1 else SYNC_MS_MULTI_ZED)
@@ -162,7 +183,7 @@ def launch_setup(context):
              name=f'epson_{IMU_FRAME}_to_zed_{arm}_{eye}',
              arguments=['--x', str(x), '--y', str(y), '--z', str(z),
                         '--qx', str(qx), '--qy', str(qy), '--qz', str(qz), '--qw', str(qw),
-                        '--frame-id', IMU_FRAME, '--child-frame-id', optical_frame(arm, eye)])
+                        '--frame-id', IMU_FRAME, '--child-frame-id', optical_frame(arm, eye, suffix)])
         for arm, eye in cameras
         for x, y, z, qx, qy, qz, qw in [poses[(arm, eye)]]]
 
@@ -176,7 +197,7 @@ def launch_setup(context):
         'tracking_mode': 1 if use_imu else 0,  # 1: VIO (IMU fusion), 0: multi camera
         'num_cameras': len(cameras),
         'min_num_images': len(cameras),
-        'camera_optical_frames': [optical_frame(arm, eye) for arm, eye in cameras],
+        'camera_optical_frames': [optical_frame(arm, eye, suffix) for arm, eye in cameras],
         # rig frame of cuVSLAM: base_link, or livox_frame to compare with FAST-LIVO2 (see output_frame)
         'base_frame': output_frame,
         'odom_frame': odom_frame,
@@ -207,6 +228,13 @@ def launch_setup(context):
             'accel_random_walk': 6.113996506614726e-05,     # m/s^3/sqrt(Hz)
             'imu_jitter_threshold_ms': 2000.0 / float(LaunchConfiguration('imu_rate').perform(context)),
         })
+
+    # overrides: cuVSLAM parameters replacing the ones above (parameter sweeps, record_bag.sh -p)
+    overrides = LaunchConfiguration('overrides').perform(context).strip().strip('\'"')
+    if overrides and overrides.lower() != 'none':
+        changes = parse_overrides(overrides, parameters)
+        parameters.update(changes)
+        actions.append(LogInfo(msg=f'[cuVSLAM] overrides {changes}'))
 
     visual_slam_node = ComposableNode(
         name='visual_slam_node',
@@ -277,6 +305,14 @@ def generate_launch_description():
                                           f'(empty: {SYNC_MS_ONE_ZED} for 1 ZED, {SYNC_MS_MULTI_ZED} for several)'),
         DeclareLaunchArgument('use_sim_time', default_value='false',
                               description='true: /clock time, to replay a bag (ros2 bag play --clock)'),       
+        DeclareLaunchArgument('frame_suffix', default_value='_epson',
+                              description='camera optical frames zed_<arm>_<eye>_camera_optical_frame<suffix>; '
+                                          'bag replays: another one (e.g. _epson_replay), the bag '
+                                          '/tf_static already has the _epson ones of the recording'),
+        DeclareLaunchArgument('overrides', default_value='',
+                              description='cuVSLAM node parameters replacing the launch ones, '
+                                          '"name=value;..." e.g. "multicam_mode=2;'
+                                          'enable_ground_constraint_in_odometry=true" (none: no change)'),
         DeclareLaunchArgument('jitter_ms', default_value='70.0',
                               description='max delta between frames before a warning '
                                           '(> 1000 / camera rate)'),        
